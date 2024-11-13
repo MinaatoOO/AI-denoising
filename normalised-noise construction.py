@@ -128,3 +128,21 @@ for dataset_type in ["train", "test"]:
         
         # Appliquer le bruit avec un segment aléatoire et le RSB spécifié
         add_noise(clean_path, noise, rsb_db, noisy_path, sample_rate)
+
+
+
+
+#ici on normalise le noisy
+for dataset_type in ["train", "test"]:
+    noisyy_dir = os.path.join(data_dir, dataset_type, "noisy")
+    
+    for filename in os.listdir(noisyy_dir):
+        if filename.endswith(".flac"):
+            noise_path = os.path.join(noisyy_dir, filename)
+            noisee,Feee=torchaudio.load(noise_path)  # charger le fichier bruité
+            # Normaliser le fichier audio bruité
+            maxi=noisee.abs().max()
+            noisee=noisee/maxi
+                    
+
+
