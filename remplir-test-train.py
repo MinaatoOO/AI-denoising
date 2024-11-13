@@ -9,7 +9,7 @@ test_dir = 'DATA/test/clean'
 
 
 # Récupère tous les fichiers dans le dossier DataTotale
-all_files = [f for f in os.listdir(data_dir) ]
+all_files = [f for f in os.listdir(data_dir) ] #os.listdir renvoie une liste contenant 
 
 # Mélange aléatoire des fichiers pour une répartition aléatoire
 #random.shuffle(all_files)
@@ -20,7 +20,7 @@ test_size=int(0.2 * len(all_files))#20% pour le test
 
 # Répartit les fichiers
 train_files = all_files[:train_size]
-test_files = all_files[:test_size]
+test_files = all_files[train_size:]
 
 # Copie les fichiers d'entraînement
 for file_name in train_files:
