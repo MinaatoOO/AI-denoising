@@ -27,8 +27,9 @@ import random
 
 # Exemple de spectrogramme (remplacez-le par votre propre tableau NumPy)
 # Supposons que `spectrogram` soit votre tableau NumPy contenant le spectrogramme.
-spectrogram_predicted = np.load("Result/predicted_spect/8.npy")
-spectrogram_original = "DATA/test/clean/8.flac"
+spectrogram_predicted = np.load("Result/flac_synth/6_source_anasyn.flac")
+spectrogram_original = np.load("Result/flac_synth/6_synth.flac")
+
 
 # Affichage du spectrogramme
 plt.figure(figsize=(10, 4))
