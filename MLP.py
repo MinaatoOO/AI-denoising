@@ -1,6 +1,7 @@
 """
 Nom du Fichier : MLP.py
-Description    : à pour but de tester les afficheurs d'un fichier .FLAC
+Description    : à pour but de réaliser une regression via MLP (Multi Layer Perceptron)
+                 pour débruiter le un signal de conversation.
 Auteur         : Bounsavath
 Date           : 13 11 2024
 Version        : 1.0
@@ -45,10 +46,10 @@ activation_function='relu'  #fonction d'activation: 'relu' tanh' 'swish'
 solver='adam'               # Optimiseur: 'adam' 'lbfgs' 
 max_iter=200                #nb max d'itérations
 seed=42                     #seed pour la randomisation des poids initiaux
-alpha=0.0001                #regularisation
+alpha=0.001                #regularisation
 
 # Step
-step_extract_features = 1
+step_extract_features = 0
 step_train = 1
 step_test = 1
 step_synth = 1
