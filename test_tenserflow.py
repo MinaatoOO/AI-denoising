@@ -8,8 +8,8 @@ from tensorflow.keras.models import load_model
 from tensorflow.keras.losses import MeanSquaredError
 
 # Charger le modèle enregistré
-model_path = "mlp_denoising_model.h5"
-model = load_model(model_path, custom_objects={'mse': MeanSquaredError()})
+model_path = "mlp_denoising_model_-20dB.h5"
+model = load_model("mlp_denoising_model_-20dB.h5", custom_objects={'mse': MeanSquaredError()})
 print(f"Modèle chargé depuis : {model_path}")
 
 # Fonction pour charger les fichiers audio
@@ -25,9 +25,9 @@ def load_audio_files(data_dir):
     return audio_data, file_names
 
 # Dossiers des fichiers bruités, propres et totaux
-clean_dir = 'Data2/clean'
-noisy_dir = 'Data2/noisy'
-total_dir = 'Data2/noisy'
+clean_dir = 'Processed_Audio_-20dB/clean'
+noisy_dir = 'Processed_Audio_-20dB/noisy'
+total_dir = 'Processed_Audio_-20dB/noisy'
 
 # Charger les fichiers clean, noisy et originaux
 clean_audio, clean_files = load_audio_files(clean_dir)
@@ -35,7 +35,7 @@ noisy_audio, noisy_files = load_audio_files(noisy_dir)
 
 random_indices = []
 for i in range(len(clean_files)):
-    if clean_files[i] in ['509.flac','375.flac','1087.flac']:
+    if clean_files[i] in ['1170.flac','840.flac','1087.flac']:
         random_indices.append(i)
 
 
@@ -52,7 +52,7 @@ def spectrogram_to_audio_with_phase(magnitude, phase, hop_length=512):
     return librosa.istft(S_complex, hop_length=hop_length)
 
 # Répertoire de sauvegarde des fichiers prédits
-output_dir = os.path.join('Data2', 'predicted_audio')
+output_dir = os.path.join('Processed_Audio_-20dB', 'predicted_audio_20dB')
 os.makedirs(output_dir, exist_ok=True)  # Crée le dossier s'il n'existe pas , il va se créer au debut
 
 # Sélectionner 3 fichiers de test sur les quels le modele n'est pas encore entrainé
@@ -100,7 +100,7 @@ for idx in random_indices:
 
     plt.subplot(3, 1, 1)
     librosa.display.specshow(librosa.amplitude_to_db(noisy_spectrogram, ref=np.max), sr=sr, hop_length=512, y_axis='log', x_axis='time')
-    plt.title("Spectrogramme Bruité (Noisy)")
+    plt.title("Spectrogramme Bruité (Noisy)_20dB")
     plt.colorbar(format='%+2.0f dB')
 
     plt.subplot(3, 1, 2)
@@ -110,7 +110,7 @@ for idx in random_indices:
 
     plt.subplot(3, 1, 3)
     librosa.display.specshow(librosa.amplitude_to_db(predicted_spectrogram, ref=np.max), sr=sr, hop_length=512, y_axis='log', x_axis='time')
-    plt.title("Spectrogramme Débruité (Predicted)")
+    plt.title("Spectrogramme Débruité (Predicted)_20dB")
     plt.colorbar(format='%+2.0f dB')
 
     plt.tight_layout()
