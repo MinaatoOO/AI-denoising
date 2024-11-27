@@ -20,6 +20,7 @@ from sklearn.preprocessing import MinMaxScaler
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import mean_squared_error
 from project_tools.compute import *
+from project_tools.plot import *
 import glob
 import re
 import pickle 
@@ -31,17 +32,17 @@ import pdb # Debugger: utilisez pdb.set_trace() pour mettre un point d'arrêt
 ##CONFIG
 
 # Audio feature extraction 
-n_fft = 1024
-win_length = 400 
-hop_length = 160 
+n_fft = 512
+win_length = 512
+hop_length = 256 
 window = 'hann'
 audio_fs = 16000
 fmin = 20
 fmax = 8000
-n_mels = 40
+n_mels = 64
 
 # MLP-based regression
-mlp_arch=(256,128,64,128,256)
+mlp_arch=(64,64)
 activation_function='relu'  #fonction d'activation: 'relu' tanh' 'swish'
 solver='adam'               # Optimiseur: 'adam' 'lbfgs' 
 max_iter=200                #nb max d'itérations
@@ -50,9 +51,10 @@ alpha=0.001                #regularisation
 
 # Step
 step_extract_features = 0
-step_train = 1
+step_train = 0
 step_test = 1
 step_synth = 1
+step_display = 0
 
 # path
 noisy_audio_dir = 'Data2/noisy'
@@ -70,10 +72,10 @@ nb_sentences = 1585
 def listdir_fullpath(d):
     return [join(d, f) for f in listdir(d)]
 ##################################################################
-def extract_features(input_dir, clean_dir):
+def extract_features(input_dir, output_dir, audio_fs=16000,n_fft=512,win_length=512,hop_length=256,window='hann',n_mels=64,fmin=20,fmax=8000):
     
-    if isdir(clean_dir) is False:
-        mkdir(clean_dir)
+    if isdir(output_dir) is False:
+        mkdir(output_dir)
 
     all_audio_filenames = sorted(listdir_fullpath(input_dir))
 
@@ -82,12 +84,10 @@ def extract_features(input_dir, clean_dir):
 
         #On commence par calculer la STFT de y 
         y_stft = librosa.stft(y,n_fft=n_fft, win_length=win_length, hop_length=hop_length, window=window)
-        #On prends le module au carré pour avoir le spectre de puissance
-        Py = np.abs(y_stft)**2
-        #On se place dans l'échelle melspectrogramme
-        S = librosa.feature.melspectrogram(S=Py, sr=sr, n_mels=n_mels, fmin=fmin, fmax=fmax)
-
-        np.save(clean_dir + '/' + splitext(basename(all_audio_filenames[f]))[0] + '.npy',S.transpose())
+        #On prends le module
+        Py = np.abs(y_stft)
+        
+        np.save(output_dir + '/' + splitext(basename(all_audio_filenames[f]))[0] + '.npy',Py.transpose())
 
 ###########################################################################
 
@@ -96,8 +96,8 @@ def do_train(ind):
     all_noisy_features_filenames = sorted(listdir_fullpath(output_dir + '/noisy_features'))
     all_clean_features_filenames = sorted(listdir_fullpath(output_dir + '/clean_features'))
     max_nb_frames = 1000000 
-    X_train = np.zeros((max_nb_frames,n_mels))
-    y_train = np.zeros((max_nb_frames,n_mels))
+    X_train = np.zeros((max_nb_frames,int((n_fft/2)+1)))
+    y_train = np.zeros((max_nb_frames,int((n_fft/2)+1)))
     iter = 0
     for f in ind:
         noisy_features = np.load(all_noisy_features_filenames[f])
@@ -139,6 +139,9 @@ def do_train(ind):
 def do_test(ind):
     if isdir(output_dir + '/flac_synth') is False:
         mkdir(output_dir + '/flac_synth')
+    
+    if isdir(output_dir + '/clean_features_predicted/') is False:
+        mkdir(output_dir + '/clean_features_predicted/')
         
     regr = pickle.load(open(output_dir + '/regr.dat', 'rb'))
 
@@ -148,6 +151,9 @@ def do_test(ind):
 
     all_noisy_features_filenames = sorted(listdir_fullpath(output_dir + '/noisy_features'))
     all_clean_features_filenames = sorted(listdir_fullpath(output_dir + '/clean_features'))
+
+    all_noisy_sound_filenames = sorted(listdir_fullpath('Data2/noisy'))
+    all_clean_sound_filenames = sorted(listdir_fullpath('Data2/clean'))
     
     all_clean_features_predicted = []
     all_clean_features_original = []
@@ -156,22 +162,24 @@ def do_test(ind):
         noisy_features = np.load(all_noisy_features_filenames[f])
         clean_features = np.load(all_clean_features_filenames[f])
         clean_features_predicted = output_scaler.inverse_transform(regr.predict(input_scaler.transform(noisy_features)))
-
+        
         #Stocker l'ensemble des séquences cibles prédites (clean_features_predicted) ainsi que les séquences cibles originales (dans 2 numpy array distinctes).
         all_clean_features_predicted.append(clean_features_predicted)
         all_clean_features_original.append(clean_features)
         
         if step_synth:
-            y_noisy = librosa.feature.inverse.mel_to_audio(noisy_features.transpose(),sr=audio_fs, n_fft=n_fft, hop_length=hop_length, win_length=win_length, window=window, power=2.0, n_iter=64,fmin=fmin, fmax=fmax)
-            sf.write(output_dir + '/flac_synth/' + splitext(basename(all_noisy_features_filenames[f]))[0] + "_noisy_anasyn.flac", y_noisy, audio_fs, 'PCM_16')
+            noisy,sr = librosa.load(all_noisy_sound_filenames[f])
+            noisy_stft_original = librosa.stft(noisy, n_fft=n_fft, hop_length=hop_length, win_length=win_length, window=window)   
+            noisy_phase = np.angle(noisy_features)
+           
+            clean_predicted_stft = clean_features_predicted.T * np.exp(1j * noisy_phase.T)
 
-            y_clean = librosa.feature.inverse.mel_to_audio(clean_features.transpose(),sr=audio_fs, n_fft=n_fft, hop_length=hop_length, win_length=win_length, window=window, power=2.0, n_iter=64,fmin=fmin, fmax=fmax)
-            sf.write(output_dir + '/flac_synth/' + splitext(basename(all_clean_features_filenames[f]))[0] + "_clean_anasyn.flac", y_clean, audio_fs, 'PCM_16')
+            reconstructed_clean_predicted = librosa.istft(clean_predicted_stft,hop_length=hop_length, win_length=win_length, window=window)
 
-            y_clean_predicted = librosa.feature.inverse.mel_to_audio(clean_features_predicted.transpose(),sr=audio_fs, n_fft=n_fft, hop_length=hop_length, win_length=win_length, window=window, power=2.0, n_iter=32,fmin=fmin, fmax=fmax)
-            sf.write(output_dir + '/flac_synth/' + splitext(basename(all_clean_features_filenames[f]))[0] + "_synth.flac", y_clean_predicted, audio_fs, 'PCM_16')
-
-        #TODO: Evaluer la performance globale du système de conversion en calculant l'erreur quadratique moyenne entre les mel-spectrogrammes cibles prédits et les mel-spectrogramme originaux (par exemple à l'aide de la fonction sklearn.metrics.mean_squared_error). 
+            sf.write(output_dir + '/flac_synth/' + splitext(basename(all_clean_features_filenames[f]))[0] + "_synth.flac", reconstructed_clean_predicted, audio_fs, 'PCM_16')
+            
+    
+        np.save(output_dir + '/clean_features_predicted/' + splitext(basename(all_noisy_features_filenames[f]))[0] + '.npy', clean_features_predicted) 
     
     # Convertir les listes en numpy arrays pour le calcul global
     all_clean_features_predicted = np.vstack(all_clean_features_predicted)
@@ -179,32 +187,6 @@ def do_test(ind):
     # Calculer l'erreur quadratique moyenne (MSE) entre les spectrogrammes cibles originaux et prédits
     mse = mean_squared_error(all_clean_features_original, all_clean_features_predicted)
     print("Erreur quadratique moyenne (MSE) entre les spectrogrammes cibles et prédits :", mse)
-    plt.figure(figsize=(10, 4))
-    librosa.display.specshow(clean_features.T, sr=audio_fs, hop_length=hop_length)
-    plt.colorbar(format='%+2.0f dB')
-    plt.title('Melspectrogramme original sans bruit')
-    plt.show()
-    plt.figure(figsize=(10, 4))
-
-    plt.figure(figsize=(10, 4))
-    librosa.display.specshow(clean_features_predicted.T, sr=audio_fs, hop_length=hop_length)
-    plt.colorbar(format='%+2.0f dB')
-    plt.title('Melspectrogramme prédit et débruité')
-    plt.show()
-
-    plt.figure(figsize=(10, 4))
-    plt.plot(y_clean_predicted)  # Assurez-vous que y_clean_predicted est la forme d'onde reconstruite
-    plt.title('Forme d\'onde associée au MelSpectrogramme débruité')
-    plt.xlabel('Temps')
-    plt.ylabel('Amplitude')
-    plt.show()
-
-    plt.figure(figsize=(10, 4))
-    plt.plot(y_clean)  # Assurez-vous que y_clean_synth est la forme d'onde reconstruite
-    plt.title('Forme d\'onde associée au MelSpectrogramme original sans bruit ')
-    plt.xlabel('Temps')
-    plt.ylabel('Amplitude')
-    plt.show()
 
 ######################################################################################
 # Main
@@ -232,6 +214,21 @@ if __name__ == '__main__':
         test_ind = np.load(output_dir + '/test_ind.npy')
         do_test(test_ind)
 
+    if step_display:
+        all_noisy_features_filenames = sorted(listdir_fullpath(output_dir + '/noisy_features'))
+        all_clean_features_filenames = sorted(listdir_fullpath(output_dir + '/clean_features'))
+        all_clean_features_predicted_filenames = sorted(listdir_fullpath(output_dir + '/clean_features_predicted'))
+        nb_graph = 2
+        i=0
+        fig, axes = plt.subplots(3, nb_graph, figsize=(10, 10))
+        for i in range(nb_graph):
+            clean = np.load(all_clean_features_filenames[i])
+            noisy = np.load(all_noisy_features_filenames[i])
+            predicted = np.load(all_clean_features_predicted_filenames[i])
+            axes[0,i].imshow(clean.T)
+            axes[1,i].imshow(noisy.T)
+            axes[2,i].imshow(predicted.T)
+        plt.show()
         
 
 
